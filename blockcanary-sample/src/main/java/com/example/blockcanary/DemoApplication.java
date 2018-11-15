@@ -17,6 +17,9 @@ package com.example.blockcanary;
 
 import android.app.Application;
 import android.content.Context;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Looper;
 
 import com.github.moduth.blockcanary.BlockCanary;
 
@@ -28,7 +31,22 @@ public class DemoApplication extends Application {
     public void onCreate() {
         super.onCreate();
         sContext = this;
+        HandlerThread handlerThread = new HandlerThread("test");
+        handlerThread.start();
+        Looper targetLooper = handlerThread.getLooper();
+        BlockCanary.setTargetLooper(targetLooper);
         BlockCanary.install(this, new AppContext()).start();
+        Handler handler = new Handler(targetLooper);
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Thread.sleep(10000L);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 
     public static Context getAppContext() {

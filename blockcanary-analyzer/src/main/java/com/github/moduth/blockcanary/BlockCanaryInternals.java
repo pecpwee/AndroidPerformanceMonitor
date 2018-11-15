@@ -32,15 +32,27 @@ public final class BlockCanaryInternals {
     StackSampler stackSampler;
     CpuSampler cpuSampler;
 
+    public void setTargetThread2Sample(Thread targetThread2Sample) {
+        this.targetThread2Sample = targetThread2Sample;
+        stackSampler = new StackSampler(
+                targetThread2Sample,
+                sContext.provideDumpInterval());
+    }
+
+    private Thread targetThread2Sample;
+
     private static BlockCanaryInternals sInstance;
     private static BlockCanaryContext sContext;
 
     private List<BlockInterceptor> mInterceptorChain = new LinkedList<>();
 
     public BlockCanaryInternals() {
+        this(Looper.getMainLooper().getThread());
+    }
 
+    public BlockCanaryInternals(Thread targetThread){
         stackSampler = new StackSampler(
-                Looper.getMainLooper().getThread(),
+                targetThread,
                 sContext.provideDumpInterval());
 
         cpuSampler = new CpuSampler(sContext.provideDumpInterval());
@@ -72,6 +84,20 @@ public final class BlockCanaryInternals {
         }, getContext().provideBlockThreshold(), getContext().stopWhenDebugging()));
 
         LogWriter.cleanObsolete();
+
+
+    }
+
+
+    public static BlockCanaryInternals initInstance(Thread thread){
+        if (sInstance == null) {
+            synchronized (BlockCanaryInternals.class) {
+                if (sInstance == null) {
+                    sInstance = new BlockCanaryInternals(thread);
+                }
+            }
+        }
+        return sInstance;
     }
 
     /**

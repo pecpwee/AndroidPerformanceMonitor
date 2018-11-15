@@ -23,6 +23,7 @@ import android.preference.PreferenceManager;
 
 import com.github.moduth.blockcanary.ui.DisplayActivity;
 
+import java.lang.ref.WeakReference;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -37,16 +38,32 @@ public final class BlockCanary {
     private static BlockCanary sInstance;
     private BlockCanaryInternals mBlockCanaryCore;
     private boolean mMonitorStarted = false;
+    private static WeakReference<Looper> sTargetLooperRef;
 
     private BlockCanary() {
         BlockCanaryInternals.setContext(BlockCanaryContext.get());
-        mBlockCanaryCore = BlockCanaryInternals.getInstance();
+        mBlockCanaryCore = BlockCanaryInternals.initInstance(getTargetLooper().getThread());
         mBlockCanaryCore.addBlockInterceptor(BlockCanaryContext.get());
         if (!BlockCanaryContext.get().displayNotification()) {
             return;
         }
         mBlockCanaryCore.addBlockInterceptor(new DisplayService());
 
+    }
+
+    public static void setTargetLooper(Looper looper) {
+        sTargetLooperRef = new WeakReference<>(looper);
+    }
+
+    public static Looper getTargetLooper() {
+        if (sTargetLooperRef == null) {
+            return Looper.getMainLooper();
+        }
+        Looper looper = sTargetLooperRef.get();
+        if (looper == null) {
+            looper = Looper.getMainLooper();
+        }
+        return looper;
     }
 
     /**
@@ -82,11 +99,18 @@ public final class BlockCanary {
      * Start monitoring.
      */
     public void start() {
+        if (sTargetLooperRef == null) {
+            sTargetLooperRef = new WeakReference<>(Looper.getMainLooper());
+        }
         if (!mMonitorStarted) {
             mMonitorStarted = true;
-            Looper.getMainLooper().setMessageLogging(mBlockCanaryCore.monitor);
+            Looper looper = sTargetLooperRef.get();
+            if (looper != null) {
+                looper.setMessageLogging(mBlockCanaryCore.monitor);
+            }
         }
     }
+
 
     /**
      * Stop monitoring.
@@ -94,7 +118,12 @@ public final class BlockCanary {
     public void stop() {
         if (mMonitorStarted) {
             mMonitorStarted = false;
-            Looper.getMainLooper().setMessageLogging(null);
+            if (sTargetLooperRef != null) {
+                Looper looper = sTargetLooperRef.get();
+                if (looper != null) {
+                    looper.setMessageLogging(null);
+                }
+            }
             mBlockCanaryCore.stackSampler.stop();
             mBlockCanaryCore.cpuSampler.stop();
         }
